@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Hedefi Vur — Neon/Balon Stili</title>
+<style>
+:root{
+  --bg:#0b0f26; --panel:#141a3f; --panel2:#192159; --ink:#eef0ff; --muted:#a9add6;
+  --accent:#6c5dd3; --gold:#ffde59; --good:#2ecc71; --danger:#e74c3c;
+}
+*{box-sizing:border-box;user-select:none}
+html,body{
+  height:100%;margin:0;background:var(--bg);color:var(--ink);
+  font-family:Inter,system-ui,'Segoe UI',Roboto,Arial;overflow:hidden
+}
+
+/* merkeze yerleştir */
+.wrapper{height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
+
+/* SAHNE: normal, maximize = tüm ekran; minimize = dock */
+.stage{
+  position:relative;
+  width:min(92vw, 960px);
+  height:min(92vh, 660px);
+  transform-origin:center;
+  transition:width .25s, height .25s, left .25s, bottom .25s;
+  border-radius:16px; overflow:hidden;
+  box-shadow:0 18px 50px rgba(0,0,0,.45)
+}
+.stage.maximized{ width:100vw; height:100vh; border-radius:0; left:0; bottom:0; }
+.stage.minimized{
+  position:fixed; left:14px; top:14px;
+  width:1200px; height:260px; z-index:50; border-radius:16px;
+}
+
+/* oyun kabı */
+#game{
+  position:relative; inset:0; width:100%; height:100%;
+  background:radial-gradient(110% 90% at 50% 100%, var(--panel2) 0%, var(--bg) 70%);
+  overflow:hidden
+}
+
+/* üst bar */
+.topbar{
+  position:absolute; left:0; right:0; top:0;
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 18px; z-index:10; font-weight:700;
+  background:rgba(0,0,0,.15)
+}
+.meta{display:flex; gap:18px; align-items:center}
+.score,.time{font-size:1.1rem; text-shadow:0 0 10px var(--accent)}
+.controls{display:flex; align-items:center; gap:8px}
+.btn{
+  background:linear-gradient(180deg,var(--accent),#4e42c2); color:#fff;
+  border:1px solid rgba(255,255,255,.2); border-radius:10px;
+  padding:8px 12px; cursor:pointer; box-shadow:0 6px 14px rgba(0,0,0,.35);
+  display:flex; align-items:center; gap:8px; font-weight:700
+}
+.btn.ghost{background:linear-gradient(180deg,#2b2f55,#1d2147)}
+.btn.good{background:linear-gradient(180deg,var(--good),#177845)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:none; box-shadow:0 0 0 3px var(--bg), 0 0 0 5px var(--gold)}
+.icon{width:20px; height:20px}
+.icon img{width:20px; height:20px; display:block}
+
+/* sol-alt bilgi etiketi */
+.info{
+  position:absolute; left:12px; bottom:10px; z-index:11;
+  color:var(--gold); font-weight:700; font-size:.95rem;
+  text-shadow:0 0 8px rgba(255,222,89,.55);
+  background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.15);
+  padding:6px 10px; border-radius:10px
+}
+
+/* oyun alanı */
+#playfield{position:absolute; inset:0; cursor:crosshair}
+
+/* hedef */
+#target{
+  position:absolute; width:60px; height:60px; border-radius:50%;
+  background:radial-gradient(circle, #ffffff 15%, var(--danger) 16%, var(--danger) 40%, #ffffff 41%, #ffffff 60%, var(--danger) 61%);
+  box-shadow:0 0 15px var(--danger), 0 0 25px var(--danger);
+  transform:scale(0);
+  transition:top .15s ease-out, left .15s ease-out, transform .1s ease
+}
+#target.active{transform:scale(1)}
+#target:active{transform:scale(.9)!important}
+
+/* hit efekti */
+.hit-marker{
+  position:absolute; width:80px; height:80px; border:4px solid var(--gold);
+  border-radius:50%; transform:scale(0); animation:hit .3s ease-out; pointer-events:none
+}
+@keyframes hit{from{transform:scale(.5);opacity:1} to{transform:scale(1.5);opacity:0}}
+
+/* modallar */
+.modal{position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(11,15,38,.7); backdrop-filter:blur(8px); z-index:20}
+.modal.active{display:flex}
+.card{
+  position:relative; width:min(92%,520px);
+  background:linear-gradient(160deg,var(--panel),var(--panel2));
+  border:1px solid var(--accent); border-radius:16px; padding:28px 26px;
+  text-align:center; box-shadow:0 18px 60px rgba(0,0,0,.55)
+}
+.card h2{margin:0 0 10px; font-size:1.9rem; color:var(--gold)}
+.card p{margin:0; color:var(--muted)}
+.close-btn{
+  position:absolute; top:10px; right:10px; width:30px; height:30px;
+  border:none; background:rgba(255,255,255,.1); color:var(--muted);
+  border-radius:50%; font-size:20px; line-height:30px; text-align:center; cursor:pointer
+}
+.close-btn:hover{background:rgba(255,255,255,.2); color:var(--ink)}
+.passbox{
+  margin:18px auto 0; display:flex; align-items:center; justify-content:center; gap:10px;
+  padding:10px 12px; border-radius:12px; background:rgba(0,0,0,.3); width:max-content
+}
+.pass{font-weight:800; letter-spacing:2px; color:var(--gold); text-shadow:0 0 10px var(--gold)}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="stage" id="stage">
+    <div id="game" aria-label="Hedefi Vur">
+      <div class="topbar">
+        <div class="meta">
+          <div class="score">Puan: <span id="score">0</span></div>
+          <div class="time">Süre: <span id="time">60</span></div>
+        </div>
+        <div class="controls">
+          <!-- TOGGLE: ikisi de var, durumuna göre görünür/gizli -->
+          <button class="btn ghost" id="maxBtn" title="Maximize">
+            <span class="icon"><img src="https://raw.githubusercontent.com/erhan3861/Maze-oyunu/main/maximize.png" alt="Maximize"></span>
+          </button>
+          <button class="btn ghost" id="minBtn" title="Minimize" style="display:none">
+            <span class="icon"><img src="https://raw.githubusercontent.com/erhan3861/Maze-oyunu/main/minimize.png" alt="Minimize"></span>
+          </button>
+          <button class="btn good" id="startBtn">BAŞLAT</button>
+        </div>
+      </div>
+
+      <div id="playfield"></div>
+
+      <div class="info">Doğru=+10 · Miss=−3 · Hedef 850 ms’de yer değiştirir · Hedef: <b>100</b></div>
+
+      <!-- Başlangıç -->
+      <div class="modal active" id="startModal" role="dialog" aria-modal="true">
+        <div class="card">
+          <h2>Hedefi Vur</h2>
+          <p>Hedefe tıkla, kaçırırsan puan düşer. <b>100</b> puana ulaş, şifreyi aç!</p>
+          <div style="margin-top:14px">
+            <button class="btn good" id="startBtn2">Oyuna Başla</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Şifre -->
+      <div class="modal" id="passModal" role="dialog" aria-modal="true">
+        <div class="card">
+          <button id="closePassModalBtn" class="close-btn" title="Kapat">&times;</button>
+          <h2>Tebrikler!</h2>
+          <p>Hedef puanı geçtin. Bölüm şifren:</p>
+          <div class="passbox">
+            <span class="pass" id="password">—</span>
+            <button class="btn" id="copyBtn">Kopyala</button>
+          </div>
+          <p style="margin-top:12px;color:var(--muted)">Yeni tur için üstte <b>BAŞLAT</b> butonunu kullan.</p>
+        </div>
+      </div>
+
+      <!-- Süre bitti -->
+      <div class="modal" id="endModal" role="dialog" aria-modal="true">
+        <div class="card">
+          <h2>Oyun Bitti!</h2>
+          <p id="endScore">Toplam Puanın: 0</p>
+          <p style="color:var(--muted)">Tekrar denemek için üstteki <b>BAŞLAT</b> butonunu kullan.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(()=>{'use strict';
+  // ==== Ayarlar ====
+  const GAME_DURATION = 60;
+  const TARGET_MOVE_INTERVAL = 850;
+  const PASSWORD_KEY = 'TARGET-PRO-2025-AIM';
+  const TARGET_SCORE = 100;
+  const MISS_PENALTY = 3;
+
+  // ==== DOM ====
+  const stage = document.getElementById('stage');
+  const playfield = document.getElementById('playfield');
+  const scoreEl = document.getElementById('score');
+  const timeEl  = document.getElementById('time');
+  const startModal = document.getElementById('startModal');
+  const passModal  = document.getElementById('passModal');
+  const endModal   = document.getElementById('endModal');
+  const passText   = document.getElementById('password');
+  const endScoreEl = document.getElementById('endScore');
+
+  const startBtn  = document.getElementById('startBtn');
+  const startBtn2 = document.getElementById('startBtn2');
+  const copyBtn   = document.getElementById('copyBtn');
+  const closePassModalBtn = document.getElementById('closePassModalBtn');
+
+  const maxBtn = document.getElementById('maxBtn');
+  const minBtn = document.getElementById('minBtn');
+
+  // ==== State ====
+  let running=false;
+  let pausedByMinimize=false;   // <<< yeni: minimize’den dönerken devam etmek için
+  let score=0, timeLeft=GAME_DURATION;
+  let timerId=null, moverId=null;
+  let target=null;
+
+  // ==== Helpers ====
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const px=v=>`${v}px`;
+  const rand=(a,b)=>Math.random()*(b-a)+a;
+  const showMaxBtn=()=>{ maxBtn.style.display='inline-flex'; minBtn.style.display='none'; };
+  const showMinBtn=()=>{ maxBtn.style.display='none';       minBtn.style.display='inline-flex'; };
+
+  function setScore(v){
+    score=v; scoreEl.textContent=score;
+    if (running && score>=TARGET_SCORE) openPassword();
+  }
+  function resetScoreAndTime(){
+    setScore(0);
+    timeLeft=GAME_DURATION; timeEl.textContent=timeLeft;
+  }
+
+  // ==== Target ====
+  function ensureTarget(){
+    if (target) return;
+    target=document.createElement('div');
+    target.id='target';
+    target.addEventListener('click', onTargetClick);
+    playfield.appendChild(target);
+    requestAnimationFrame(()=> target.classList.add('active'));
+  }
+  function moveTarget(){
+    if (!running || !target) return;
+    const w=playfield.clientWidth, h=playfield.clientHeight;
+    const s=target.clientWidth || 60;
+    const x=Math.random()*(w - s);
+    const y=Math.random()*(h - s);
+    target.style.left=px(Math.max(0,x));
+    target.style.top =px(Math.max(0,y));
+  }
+
+  function spawnLoops(){
+    timerId=setInterval(()=>{
+      timeLeft--; timeEl.textContent=timeLeft;
+      if (timeLeft<=0){ return gameOver(); }
+    },1000);
+    moverId=setInterval(moveTarget, TARGET_MOVE_INTERVAL);
+  }
+
+  // ==== Game Flow ====
+  function startGame(){
+    if (stage.classList.contains('minimized')) stage.classList.remove('minimized');
+
+    startModal.classList.remove('active');
+    passModal.classList.remove('active');
+    endModal.classList.remove('active');
+
+    resetScoreAndTime();
+    running=true;
+
+    ensureTarget();
+    target.classList.add('active');
+    moveTarget();
+
+    clearInterval(timerId); clearInterval(moverId);
+    spawnLoops();
+  }
+
+  function resumeGame(){       // <<< yeni: kaldığı yerden devam
+    if (timeLeft<=0) return;   // süre bittiyse dönme
+    startModal.classList.remove('active');
+    passModal.classList.remove('active');
+    endModal.classList.remove('active');
+
+    running=true;
+    ensureTarget();
+    target.classList.add('active');
+    moveTarget();
+
+    clearInterval(timerId); clearInterval(moverId);
+    spawnLoops();
+  }
+
+  function stopGame(){
+    running=false;
+    clearInterval(timerId); timerId=null;
+    clearInterval(moverId); moverId=null;
+    if (target) target.classList.remove('active'); // gizle
+  }
+
+  function gameOver(){
+    stopGame();
+    endScoreEl.textContent=`Toplam Puanın: ${score}`;
+    endModal.classList.add('active');
+  }
+
+  function openPassword(){
+    stopGame();
+    passText.textContent=PASSWORD_KEY;
+    passModal.classList.add('active');
+  }
+
+  // ==== Interactions ====
+  function onTargetClick(e){
+    if (!running) return;
+    e.stopPropagation();
+    setScore(clamp(score+10,0,999999));
+
+    const mk=document.createElement('div');
+    mk.className='hit-marker';
+    mk.style.left=px(target.offsetLeft-10);
+    mk.style.top =px(target.offsetTop-10);
+    playfield.appendChild(mk);
+    setTimeout(()=>mk.remove(),300);
+
+    moveTarget();
+    clearInterval(moverId); moverId=setInterval(moveTarget, TARGET_MOVE_INTERVAL);
+  }
+
+  // Miss tıklama
+  playfield.addEventListener('click', ()=>{ if (running) setScore(clamp(score - MISS_PENALTY, 0, 999999)); });
+
+  // ==== Buttons ====
+  startBtn.addEventListener('click', startGame);
+  startBtn2.addEventListener('click', startGame);
+
+  // Maximize: görünümü büyüt, minimize’i göster;
+  // eğer minimize yüzünden durduysa KALDIĞI YERDEN DEVAM ET.
+  maxBtn.addEventListener('click', ()=>{
+    stage.classList.add('maximized');
+    stage.classList.remove('minimized');
+    showMinBtn();
+
+    if (pausedByMinimize){
+      pausedByMinimize=false;
+      // modal açık değilse devam et
+      if (!passModal.classList.contains('active') &&
+          !endModal.classList.contains('active') &&
+          !startModal.classList.contains('active')){
+        resumeGame();
+      }
+    }
+  });
+
+  // Minimize: dock + pause; geri dönerken hatırlamak için bayrak
+  minBtn.addEventListener('click', ()=>{
+    stage.classList.remove('maximized');
+    stage.classList.add('minimized');
+    showMaxBtn();
+
+    pausedByMinimize = running; // sadece oyun çalışıyorsa otomatik devam edilsin
+    stopGame();
+  });
+
+  closePassModalBtn.addEventListener('click', ()=> passModal.classList.remove('active'));
+  copyBtn.addEventListener('click', async ()=>{
+    const t=passText.textContent.trim(); if (!t||t==='—') return;
+    try{ await navigator.clipboard.writeText(t); copyBtn.textContent='✅ Kopyalandı'; }
+    catch{ copyBtn.textContent='❌ Hata'; }
+    setTimeout(()=> copyBtn.textContent='Kopyala', 1400);
+  });
+
+  // Space: başlat/durdur
+  window.addEventListener('keydown',(e)=>{
+    if (e.key===' '){
+      e.preventDefault();
+      if (running) stopGame(); else startGame();
+    }
+  });
+
+  // İlk durum
+  showMaxBtn();
+})();</script>
+</body>
+</html>
