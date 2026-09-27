@@ -172,7 +172,7 @@ html,body{
       <!-- Süre bitti -->
       <div class="modal" id="endModal" role="dialog" aria-modal="true">
         <div class="card">
-          <button id="closePassModalBtn" class="close-btn" title="Kapat">&times;</button>
+          <button id="closeEndModalBtn" class="close-btn" title="Kapat">&times;</button>
           <h2>Oyun Bitti!</h2>
           <p id="endScore">Toplam Puanın: 0</p>
           <p style="color:var(--muted)">Tekrar denemek için üstteki <b>BAŞLAT</b> butonunu kullan.</p>
@@ -206,6 +206,7 @@ html,body{
   const startBtn2 = document.getElementById('startBtn2');
   const copyBtn   = document.getElementById('copyBtn');
   const closePassModalBtn = document.getElementById('closePassModalBtn');
+  const closeEndModalBtn  = document.getElementById('closeEndModalBtn');
 
   const maxBtn = document.getElementById('maxBtn');
   const minBtn = document.getElementById('minBtn');
@@ -366,6 +367,7 @@ html,body{
   });
 
   closePassModalBtn.addEventListener('click', ()=> passModal.classList.remove('active'));
+  closeEndModalBtn.addEventListener('click', ()=> endModal.classList.remove('active'));
   copyBtn.addEventListener('click', async ()=>{
     const t=passText.textContent.trim(); if (!t||t==='—') return;
     try{ await navigator.clipboard.writeText(t); copyBtn.textContent='✅ Kopyalandı'; }
