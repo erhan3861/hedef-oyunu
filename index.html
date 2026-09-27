@@ -11,32 +11,31 @@
 }
 *{box-sizing:border-box;user-select:none}
 html,body{
-  height:100%;margin:0;background:var(--bg);color:var(--ink);
+  height:100dvh;margin:0;background:var(--bg);color:var(--ink);
   font-family:Inter,system-ui,'Segoe UI',Roboto,Arial;overflow:hidden
 }
 
-/* merkeze yerleştir */
-.wrapper{height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
+/* SAHNE (Genially mantığı): sabit referans GENİŞLİK, yükseklik içerik kadar (height:auto).
+   JS doğal ölçüyü ölçüp transform: scale() ile sığdırır. Yükseklik #game'de, sahnede değil. */
+.tutorial-stage{
+  position:absolute; left:0; top:0;
+  width:960px; height:auto;
+  display:flex; flex-direction:column; justify-content:flex-start;
+  transform-origin:top left;
+}
+@media (max-aspect-ratio: 1/1){ .tutorial-stage{ width:560px } }                          /* dikey */
+@media (min-aspect-ratio: 1/1) and (max-height: 460px){ .tutorial-stage{ width:900px } }  /* basık */
 
-/* SAHNE: normal, maximize = tüm ekran; minimize = dock */
 .stage{
-  position:relative;
-  width:min(92vw, 960px);
-  height:min(92vh, 660px);
-  transform-origin:center;
-  transition:width .25s, height .25s, left .25s, bottom .25s;
+  position:relative; width:100%;
   border-radius:16px; overflow:hidden;
   box-shadow:0 18px 50px rgba(0,0,0,.45)
 }
-.stage.maximized{ width:100vw; height:100vh; border-radius:0; left:0; bottom:0; }
-.stage.minimized{
-  position:fixed; left:14px; top:14px;
-  width:1200px; height:260px; z-index:50; border-radius:16px;
-}
+.stage.maximized, .stage.minimized{ border-radius:0 }
 
-/* oyun kabı */
+/* oyun kabı: oyun alanının doğal yüksekliği */
 #game{
-  position:relative; inset:0; width:100%; height:100%;
+  position:relative; width:100%; height:620px;
   background:radial-gradient(110% 90% at 50% 100%, var(--panel2) 0%, var(--bg) 70%);
   overflow:hidden
 }
@@ -120,7 +119,7 @@ html,body{
 </style>
 </head>
 <body>
-<div class="wrapper">
+<main class="tutorial-stage ai-galaxy-responsive-stage" id="tutorial-stage">
   <div class="stage" id="stage">
     <div id="game" aria-label="Hedefi Vur">
       <div class="topbar">
@@ -180,7 +179,7 @@ html,body{
       </div>
     </div>
   </div>
-</div>
+</main>
 
 <script>
 (()=>{'use strict';
@@ -312,6 +311,7 @@ html,body{
     stopGame();
     passText.textContent=PASSWORD_KEY;
     passModal.classList.add('active');
+    window.parent.postMessage({ type: "ctf:flag-revealed" }, "*");
   }
 
   // ==== Interactions ====
@@ -338,33 +338,31 @@ html,body{
   startBtn.addEventListener('click', startGame);
   startBtn2.addEventListener('click', startGame);
 
-  // Maximize: görünümü büyüt, minimize’i göster;
-  // eğer minimize yüzünden durduysa KALDIĞI YERDEN DEVAM ET.
-  maxBtn.addEventListener('click', ()=>{
-    stage.classList.add('maximized');
-    stage.classList.remove('minimized');
-    showMinBtn();
-
-    if (pausedByMinimize){
-      pausedByMinimize=false;
-      // modal açık değilse devam et
-      if (!passModal.classList.contains('active') &&
-          !endModal.classList.contains('active') &&
-          !startModal.classList.contains('active')){
-        resumeGame();
-      }
+  // Tam ekran: tarayıcının Fullscreen API'si. Sayfa bir iframe'e gömülüyse yalnızca bu yolla
+  // ana pencereyi kaplayabilir (iframe'de allowfullscreen gerekir; Talent14/TalentCup'ta var).
+  // API yoksa ya da reddedilirse yedek: sahneyi iframe'in içini dolduracak kadar büyüt.
+  const tamEkranEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  function tamEkranDurumu(acik){
+    stage.classList.toggle('maximized', acik);
+    if (acik) showMinBtn(); else showMaxBtn();
+    olcekle();
+  }
+  maxBtn.addEventListener('click', async ()=>{
+    const kok = document.documentElement;
+    const iste = kok.requestFullscreen || kok.webkitRequestFullscreen;
+    if (iste && (document.fullscreenEnabled || document.webkitFullscreenEnabled)){
+      try { await iste.call(kok); return; }   // durum fullscreenchange ile güncellenir
+      catch(e){ /* izin yok: yedeğe düş */ }
     }
+    tamEkranDurumu(true);
   });
-
-  // Minimize: dock + pause; geri dönerken hatırlamak için bayrak
   minBtn.addEventListener('click', ()=>{
-    stage.classList.remove('maximized');
-    stage.classList.add('minimized');
-    showMaxBtn();
-
-    pausedByMinimize = running; // sadece oyun çalışıyorsa otomatik devam edilsin
-    stopGame();
+    if (tamEkranEl()){ (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    tamEkranDurumu(false);
   });
+  // Esc ile çıkış dahil her tam ekran değişiminde düğmeleri ve ölçeği eşitle
+  document.addEventListener('fullscreenchange', ()=> tamEkranDurumu(!!tamEkranEl()));
+  document.addEventListener('webkitfullscreenchange', ()=> tamEkranDurumu(!!tamEkranEl()));
 
   closePassModalBtn.addEventListener('click', ()=> passModal.classList.remove('active'));
   closeEndModalBtn.addEventListener('click', ()=> endModal.classList.remove('active'));
@@ -385,6 +383,36 @@ html,body{
 
   // İlk durum
   showMaxBtn();
+
+  // ==== Sahne ölçekleme (RESPONSIVE_TUTORIAL_PROMPT kuralları) ====
+  // Normal: ölçek en fazla 1, içerik yukarı yaslı (tepeden en çok UST_PAY).
+  // Maximize: ekranı doldurana kadar büyüyebilir, ortalanır. Minimize: sol üstte küçük dock.
+  const sahne = document.getElementById('tutorial-stage');
+  const PAY = 8, UST_PAY = 28;
+  function olcekle(){
+    const vv = window.visualViewport;
+    const eG = vv ? vv.width : window.innerWidth, eY = vv ? vv.height : window.innerHeight;
+    sahne.style.transform = 'none';
+    const sG = sahne.offsetWidth, sY = sahne.offsetHeight;
+    const tamSigar = Math.min((eG - PAY*2)/sG, (eY - PAY*2)/sY);
+    let oran, x, y;
+    if (stage.classList.contains('minimized')){
+      oran = Math.min(tamSigar, 0.35); x = 14; y = 14;
+    } else if (stage.classList.contains('maximized')){
+      oran = Math.min(eG/sG, eY/sY); x = (eG - sG*oran)/2; y = (eY - sY*oran)/2;
+    } else {
+      oran = Math.min(1, tamSigar);
+      x = (eG - sG*oran)/2;
+      y = Math.min(Math.max((eY - sY*oran)/2, 0), UST_PAY);
+    }
+    sahne.style.transform = `translate(${x}px,${y}px) scale(${oran})`;
+  }
+  window.addEventListener('load', olcekle);
+  window.addEventListener('resize', olcekle);
+  window.addEventListener('orientationchange', olcekle);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', olcekle);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(olcekle);
+  olcekle();
 })();</script>
 </body>
 </html>
